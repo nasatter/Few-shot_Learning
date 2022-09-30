@@ -6,15 +6,15 @@ The code is set up for CUDA but CPU will work as well. Expect 8GB of GPU memory 
 Few-shot learning is accomplished by training a network to distinguish objects opposed to classifying them. Since the network extracts features to recognize what the object is as well what it is not, transfer learning can be applied to recycle the features on a very small set.
 
 In the presented case, a set cross-section images from Sintering Assisted Additively Manufactured (SAAM) parts composed of Ni were used to train the initial model with the following:
-10-shot
-Training: 500x2
-Validation: 380x2
+10-shot,
+Training: 500x2,
+Validation: 380x2,
 Testing: 380x2
 
 After training the resulting accuracy is high at 95%. We can then use this same network to train the SS image set with the following:
-10-shot
-Training: 10x2
-Validation: 330x2
+10-shot,
+Training: 10x2,
+Validation: 330x2,
 Testing: 330x2
 
 The resulting accuracy is similarly at 91% after 100 epochs even though the training size is considerably small. It is also found that without the transfer learning, the model performs significantly less well at 85% at 300 epochs. This the method saves time and increases accuracy.

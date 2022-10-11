@@ -23,7 +23,7 @@ import torch.nn.functional as F
 #		upate_dict: updates the dictionary with new shot guess
 #
 class optimize_shot():
-	def __init__(self, data_dict,num_shot,skip_iter=0,iterations=150, greedy = True):
+	def __init__(self, data_dict,num_shot,skip_iter=0,iterations=50, greedy = False):
 		self.data_dict = data_dict
 		self.num_classes = len(data_dict['train'].keys())
 		self.train_clusters = [[]]*self.num_classes
@@ -62,7 +62,7 @@ class optimize_shot():
 			for i in range(self.num_classes):
 				all_training=self.train_clusters[i]
 				cluster_center = torch.mean(all_training,dim=0)
-				distance = F.pairwise_distance(cluster_center,all_training)
+				distance = F.cosine_similarity(cluster_center,all_training)
 				std_dev = torch.std(distance)
 				average = torch.mean(distance)
 				mx = torch.max(distance)
@@ -72,14 +72,21 @@ class optimize_shot():
 				if (self.num_shot-len(keep))>0:
 					if self.greedy:
 						_,candidates = distance.sort()
-						perm = candidates[0:(self.num_shot-len(keep))]
+						perm = candidates[-(self.num_shot-len(keep)):]
 					else:
-						candidates = torch.lt(distance,average-std_dev/2).nonzero()
+						candidates = torch.gt(distance,average+std_dev/2).nonzero()
 						bias = std_dev/2
+						iters = 0
 						while candidates.shape[0] < self.num_shot:
-							bias = bias/2
-							candidates = torch.lt(distance,average-bias).nonzero()
-							#print(candidates.shape[0],bias,average)
+							bias = bias*1.1
+							candidates = torch.gt(distance,average+bias).nonzero()
+							print(candidates.shape[0],bias,average)
+							# perform greedy if no candidates
+							if iters>10:
+								_,candidates = distance.sort()
+								perm = candidates[-(self.num_shot-len(keep)):]
+
+							iters+=1
 							
 						perm = torch.randperm(candidates.shape[0])[0:self.num_shot-len(keep)]
 					
@@ -93,7 +100,7 @@ class optimize_shot():
 
 	def check_shot(self,shot_list,img_list,distance,std_dev,average):
 		shot_index = torch.tensor([(i in shot_list)*ind for ind,i in enumerate(img_list)]).nonzero().squeeze()
-		check = torch.lt(distance[shot_index],average).nonzero()
+		check = torch.gt(distance[shot_index],average).nonzero()
 		keep = [shot_list[i] for i in check]
 		#print(keep)
 		return keep

@@ -17,14 +17,14 @@ from utils import optimize_shot
 
 # see run.bat and test.bat for examples
 parser = argparse.ArgumentParser(description="Few Shot Visual Recognition")
-parser.add_argument("-d","--directory",type = str, default = 'D:\\thesis_working\\Mat_Cropped_Imgs\\scaled_4class\\')
-parser.add_argument("-c","--class_name",type = str, default = 'new')
-parser.add_argument("-n","--run_name",type = str, default = 'new_10')
-parser.add_argument("-l","--load_weight_name",type = str, default = "weight_a.pt")
+parser.add_argument("-d","--directory",type = str, default = 'D:\\thesis_working\\Mat_Cropped_Imgs\\scaled_few_shot_update\\')
+parser.add_argument("-c","--class_name",type = str, default = 'a')
+parser.add_argument("-n","--run_name",type = str, default = 'a_10_2class')
+parser.add_argument("-l","--load_weight_name",type = str, default = "weight_finalni_10_2class.pt")
 parser.add_argument("-t","--test_only",type = int, default = 0)
-parser.add_argument("-m","--model_only",type = int, default = 0)
+parser.add_argument("-m","--model_only",type = int, default = 1)
 parser.add_argument("-ts","--train_size",type = int, default= 100)
-parser.add_argument("-sh","--shot_size", type = int, default = 10)
+parser.add_argument("-sh","--shot_size", type = int, default =10)
 parser.add_argument("-lr","--learning_rate", type = float, default = 0.00001)
 parser.add_argument("-g","--gpu",type=int, default=0)
 parser.add_argument("-e","--epoch",type=int, default=1000)
@@ -182,7 +182,7 @@ class custom_dset(Dataset):
         label = self.label_list[index]
         label=int(label)
         # add noise during training
-        if (random.random()>0.995 and self.study=='train'):
+        if (random.random()>10.995 and self.study=='train'):
             img1 = np.random.rand(224,224,3)*255
             rand1 =True
             label =0
@@ -234,7 +234,7 @@ class Flip(object):
 class Rotate(object):
     def __call__(self,img):
         if random.random()<0.5:
-            angle=random.random()*60-30
+            angle=45#random.random()*60-30
             rows,cols,cn = img.shape
             M = cv2.getRotationMatrix2D((cols/2,rows/2),angle,1)
             img = cv2.warpAffine(img,M,(cols,rows))
@@ -317,14 +317,14 @@ def generate_sets(workingdir):
             files = os.listdir(subdir)
             random.shuffle(files)
             file_dict['shot' ][classes]=files[0:shot]
-            file_dict['val'  ][classes]=files[shot:train_size+shot]
-            file_dict['test' ][classes]=files[shot+train_size:shot+2*(train_size)]
-            file_dict['train'][classes]=files[shot+2*(train_size):]+files[0:shot]
+            file_dict['train'  ][classes]=files[shot:train_size+shot]+files[0:shot]
+            file_dict['val' ][classes]=files[shot+train_size:shot+2*(train_size)]
+            file_dict['test'][classes]=files[shot+2*(train_size):]
             file_dict['class_index'][classes]=index
             file_dict['index_class'][index]=classes
             index+=1
             total += len(file_dict['train'][classes])
-            print(len(file_dict['shot' ][classes]),len(file_dict['val'  ][classes]),len(file_dict['test' ][classes]),len(file_dict['train'][classes]))
+            print("shot",len(file_dict['shot' ][classes]),'val',len(file_dict['val'  ][classes]),'test',len(file_dict['test' ][classes]),'train',len(file_dict['train'][classes]))
     for classes in file_dict['train'].keys():
         file_dict['train_weight'].append(total/len(file_dict['train'][classes]))
     file_dict['train_weight'] = file_dict['train_weight']/np.sum(file_dict['train_weight'])
@@ -338,7 +338,7 @@ class batch_knn():
         self.batch = batch
         self.ave_neighbor = ave_neighbor
         # initial guess of threshold
-        self.thresh = 0.7
+        self.thresh = 0.5
 
     def load_neighbors(self,neighbor_features, neighbor_classes):
         # We need to concat the tensor so we can vectorize the comparison
@@ -361,10 +361,10 @@ class batch_knn():
         predict_class = torch.zeros(batch).cuda()
         for i in range(batch):
             prediction = batch_tensor[i,:]
-            dist = F.pairwise_distance(prediction,self.neighbors)
+            dist = F.cosine_similarity(prediction,self.neighbors)
             if self.ave_neighbor:
                 ave_dist += torch.mean(dist)
-                close = torch.lt(dist,self.thresh)
+                close = torch.gt(dist,self.thresh)
                 dist_class = close.nonzero()
                 try:
                     class_select,_ = torch.mode(self.classes[dist_class],0)
@@ -376,7 +376,7 @@ class batch_knn():
             predict_class[i]=class_select
         # update threshold with  moving average distance
         # note we need to save this to the dictionary so it can be used in production
-        self.thresh =  ave_dist/i*0.01+self.thresh*0.99
+        self.thresh =  ave_dist/i*0.05+self.thresh*0.9
         #print(self.thresh)
         return predict_class
 
@@ -414,7 +414,7 @@ if __name__ == '__main__':
 
 
     optimizer = torch.optim.Adam(net.parameters(), lr)
-    feature_encoder_scheduler = StepLR(optimizer,step_size=1000,gamma=0.1)
+    feature_encoder_scheduler = StepLR(optimizer,step_size=100,gamma=0.1)
     class ContrastiveLoss(nn.Module):
         def __init__(self, margin=1.0):
             super(ContrastiveLoss, self).__init__()
@@ -438,6 +438,7 @@ if __name__ == '__main__':
     knn_class = batch_knn(N,N)
     l_his=[]
     acc_hist = []
+
     if test_only==0:
         acc = 0
         for epoch in range(num_epoches):
@@ -491,16 +492,16 @@ if __name__ == '__main__':
             correct = 0
             total = 0
             with torch.no_grad():
-                if shot_refine.active():
-                    for data in train_loader:
-                        image1s,labels,hot,img_name=data
-                        if torch.cuda.is_available():
-                            image1s = image1s.cuda()
-                            labels = labels.cuda()
-                            hot = hot.cuda()
-                        image1s, labels, hot = Variable(image1s), Variable(labels.float()), Variable(hot)
-                        f1=net(image1s.float())
-                        shot_refine.load_batch(f1,hot,img_name)
+                for data in train_loader:
+                    image1s,labels,hot,img_name=data
+                    if torch.cuda.is_available():
+                        image1s = image1s.cuda()
+                        labels = labels.cuda()
+                        hot = hot.cuda()
+                    image1s, labels, hot = Variable(image1s), Variable(labels.float()), Variable(hot)
+                    f1=net(image1s.float())
+                    shot_refine.load_batch(f1,hot,img_name)
+                
                 #store features and classes for knn comparison
                 shot_features = []
                 shot_classes = []
@@ -530,9 +531,10 @@ if __name__ == '__main__':
                     #print(predict.shape, labelst.shape,f1.shape)
                     correct += torch.sum(predict.view(-1,1)==labelst)/labelst.shape[0]
                     total+=1
-            file_dict = shot_refine.optimize_shot()
-            train_set.update(file_dict)
-            shot_set.update(file_dict)
+                file_dict = shot_refine.optimize_shot()
+                train_set.update(file_dict)
+                shot_set.update(file_dict)
+            
             curr_acc = 100.0 * correct / total           
             print('Accuracy of the network on the validation images: %0.2f %%' % (
                 curr_acc))

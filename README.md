@@ -19,10 +19,23 @@ Testing: 330x2
 
 The resulting accuracy is similarly at 91% after 100 epochs even though the training size is considerably small. It is also found that without the transfer learning, the model performs significantly less well at 85% at 300 epochs. This the method saves time and increases accuracy.
 
+
 Some feature that need to be implemented:
-1) Selecting the best comparison images 
-Outlier selection will considreably decrease performance. We need to find images without a certain stand-deviaion distance from the cluster center. It is anticipated that multiple early training iterations could be utilized for this task.
-2) N-Class learning
-This can be performed with the current constrastive loss function, but the clustering locations will be arbitrary and may require excessive training. Alternatively the loss function can be modified to include all classes which will then maximize the distance from all classes during a single back propogation (opposed to multiple).
+
+1) <del>Selecting the best comparison images </del>
+
+<del> Outlier selection will considreably decrease performance. We need to find images without a certain stand-deviaion distance from the cluster center. It is anticipated that multiple early training iterations could be utilized for this task.</del>
+
+2) <del>N-Class learning</del>
+
+<del>This can be performed with the current constrastive loss function, but the clustering locations will be arbitrary and may require excessive training. Alternatively the loss function can be modified to include all classes which will then maximize the distance from all classes during a single back propogation (opposed to multiple).</del>
+
 3) Multi-signal learning
+
 It is theorized that the combination of visual and audio signals can be used to increase accuracy. To test this, work is planned to convert the images into audio signals and include these signals with the images during training.
+
+Updates:
+
+Comparison images are now selected by iteratively computing the average cluster angle and randomly selecting candiatates within the average angle of the cluster. As the model trains the clusters become more dense and outliers are pushed to the boundaries of the cluster. Performance increase with this method on 4-Class learning increased by 10-20% on balanced test set.
+
+N-Class learning implements simply separate training images by their classes and place them in separate folders call the parent folder as the directory and the N-classes will be trained.
